@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Jarvis</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #050a0f;
+    --panel: #0a1420;
+    --cyan: #4dd8e6;
+    --cyan-dim: #1c5a63;
+    --amber: #e6a54d;
+    --text: #d7e6ea;
+    --text-dim: #5c7a82;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
+  }
+
+  /* faint scan-line texture for HUD feel */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, rgba(77,216,230,0.02) 0px, transparent 1px, transparent 3px);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 12px;
+    z-index: 2;
+  }
+
+  .brand {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    text-transform: uppercase;
+  }
+
+  .brand span { color: var(--text-dim); }
+
+  select#lang {
+    background: var(--panel);
+    color: var(--cyan);
+    border: 1px solid var(--cyan-dim);
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Signature element: the voice ring */
+  .orb-wrap {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid var(--cyan-dim);
+    opacity: 0.5;
+  }
+  .ring1 { width: 100%; height: 100%; }
+  .ring2 { width: 78%; height: 78%; border-style: dashed; animation: spin 30s linear infinite; }
+  .ring3 { width: 56%; height: 56%; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .core {
+    width: 34%;
+    height: 34%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #9df0f7, var(--cyan) 55%, var(--cyan-dim) 100%);
+    box-shadow: 0 0 30px rgba(77,216,230,0.5), 0 0 60px rgba(77,216,230,0.15);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    cursor: pointer;
+  }
+
+  .core.listening {
+    animation: pulse 1.1s ease-in-out infinite;
+  }
+  .core.thinking {
+    background: radial-gradient(circle at 35% 30%, #f7dca6, var(--amber) 55%, #6b4d1c 100%);
+    box-shadow: 0 0 30px rgba(230,165,77,0.5);
+    animation: think 0.9s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(77,216,230,0.5), 0 0 60px rgba(77,216,230,0.15); }
+    50% { transform: scale(1.18); box-shadow: 0 0 55px rgba(77,216,230,0.8), 0 0 90px rgba(77,216,230,0.3); }
+  }
+  @keyframes think {
+    0%, 100% { transform: rotate(0deg) scale(1); }
+    50% { transform: rotate(180deg) scale(0.9); }
+  }
+
+  .status {
+    margin-top: 28px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    min-height: 16px;
+  }
+
+  .status.active { color: var(--cyan); }
+
+  #transcript {
+    width: 100%;
+    max-width: 480px;
+    height: 32vh;
+    overflow-y: auto;
+    padding: 0 20px;
+    z-index: 2;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .line {
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(77,216,230,0.08);
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  .line .who {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    display: block;
+    margin-bottom: 2px;
+  }
+  .line.user .who { color: var(--text-dim); }
+  .line.jarvis .who { color: var(--cyan); }
+
+  footer {
+    padding: 14px 20px calc(20px + env(safe-area-inset-bottom));
+    z-index: 2;
+  }
+
+  .apikey-bar {
+    max-width: 480px;
+    margin: 0 auto 10px;
+    display: flex;
+    gap: 8px;
+  }
+  .apikey-bar input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--cyan-dim);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .apikey-bar button {
+    background: var(--cyan-dim);
+    color: var(--bg);
+    border: none;
+    border-radius: 8px;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .hint {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    max-width: 480px;
+    margin: 0 auto;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">JARVIS<span>.local</span></div>
+  <select id="lang">
+    <option value="en-US">English</option>
+    <option value="fr-FR">Français</option>
+    <option value="sw-KE">Kiswahili</option>
+    <option value="ln-CD">Lingala</option>
+    <option value="es-ES">Español</option>
+    <option value="ar-SA">العربية</option>
+    <option value="pt-PT">Português</option>
+  </select>
+</header>
+
+<main>
+  <div class="orb-wrap">
+    <div class="ring ring1"></div>
+    <div class="ring ring2"></div>
+    <div class="ring ring3"></div>
+    <div class="core" id="core"></div>
+  </div>
+  <div class="status" id="status">TAP THE CORE TO SPEAK</div>
+</main>
+
+<div id="transcript"></div>
+
+<footer>
+  <div class="apikey-bar" id="apikeyBar">
+    <input type="password" id="apikey" placeholder="Paste Anthropic API key to enable conversation" />
+    <button id="saveKey">SAVE</button>
+  </div>
+  <div class="hint">Runs entirely in this browser tab. Your key is stored only on this device.</div>
+</footer>
+
+<script>
+const core = document.getElementById('core');
+const statusEl = document.getElementById('status');
+const transcriptEl = document.getElementById('transcript');
+const langSelect = document.getElementById('lang');
+const apikeyInput = document.getElementById('apikey');
+const apikeyBar = document.getElementById('apikeyBar');
+
+let apiKey = localStorage.getItem('jarvis_api_key') || '';
+if (apiKey) { apikeyInput.value = apiKey; apikeyBar.style.opacity = '0.55'; }
+
+document.getElementById('saveKey').onclick = () => {
+  apiKey = apikeyInput.value.trim();
+  localStorage.setItem('jarvis_api_key', apiKey);
+  apikeyBar.style.opacity = '0.55';
+  addLine('jarvis', 'Key saved. I can hold a real conversation now.');
+};
+
+function addLine(who, text) {
+  const div = document.createElement('div');
+  div.className = 'line ' + who;
+  div.innerHTML = '<span class="who">' + (who === 'user' ? 'YOU' : 'JARVIS') + '</span>' + text;
+  transcriptEl.appendChild(div);
+  transcriptEl.scrollTop = transcriptEl.scrollHeight;
+}
+
+function setStatus(text, active) {
+  statusEl.textContent = text;
+  statusEl.className = 'status' + (active ? ' active' : '');
+}
+
+// --- Speech recognition setup ---
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+}
+
+function speak(text) {
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = langSelect.value;
+  utter.rate = 1.0;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utter);
+}
+
+core.addEventListener('click', () => {
+  if (!recognition) {
+    setStatus('SPEECH RECOGNITION NOT SUPPORTED IN THIS BROWSER', false);
+    addLine('jarvis', 'Voice input needs Chrome on Android. If you\\'re in Chrome and still seeing this, check that microphone access is allowed for this site.');
+    return;
+  }
+  recognition.lang = langSelect.value;
+  core.classList.add('listening');
+  setStatus('LISTENING', true);
+  try { recognition.start(); } catch(e) { /* already started */ }
+});
+
+if (recognition) {
+  recognition.onresult = (event) => {
+    const heard = event.results[0][0].transcript;
+    core.classList.remove('listening');
+    addLine('user', heard);
+    handleCommand(heard);
+  };
+
+  recognition.onerror = (event) => {
+    core.classList.remove('listening');
+    setStatus('TAP THE CORE TO SPEAK', false);
+    if (event.error === 'not-allowed') {
+      addLine('jarvis', 'Microphone access is blocked. Enable it in the site settings (tap the lock icon in the address bar) and try again.');
+    }
+  };
+
+  recognition.onend = () => {
+    core.classList.remove('listening');
+    if (statusEl.textContent === 'LISTENING') setStatus('TAP THE CORE TO SPEAK', false);
+  };
+}
+
+// --- Command routing: local device-ish actions first, then AI fallback ---
+function handleCommand(text) {
+  const lower = text.toLowerCase();
+
+  // Open a website: "open youtube", "open wikipedia"
+  const openMatch = lower.match(/^(open|go to|launch)\\s+(.+)/);
+  if (openMatch) {
+    const target = openMatch[2].trim();
+    const url = target.includes('.') ? 'https://' + target.replace(/^https?:\\/\\//, '') : 'https://www.google.com/search?q=' + encodeURIComponent(target);
+    respond('Opening ' + target + '.');
+    setTimeout(() => window.open(url, '_blank'), 400);
+    return;
+  }
+
+  // Search: "search for nearest pharmacy"
+  const searchMatch = lower.match(/^search( for)?\\s+(.+)/);
+  if (searchMatch) {
+    const query = searchMatch[2];
+    respond('Searching for ' + query + '.');
+    setTimeout(() => window.open('https://www.google.com/search?q=' + encodeURIComponent(query), '_blank'), 400);
+    return;
+  }
+
+  // Time
+  if (lower.includes('what time') || lower.includes('current time')) {
+    respond('It is ' + new Date().toLocaleTimeString() + '.');
+    return;
+  }
+
+  // Vibrate device as a "yes I heard you" tactile response, where supported
+  if (navigator.vibrate) navigator.vibrate(30);
+
+  // Fall through to AI conversation
+  askAI(text);
+}
+
+function respond(text) {
+  addLine('jarvis', text);
+  speak(text);
+}
+
+async function askAI(question) {
+  if (!apiKey) {
+    respond('Add your Anthropic API key below to enable full conversation. For device commands, try "open," "search," or "what time is it."');
+    return;
+  }
+  core.classList.add('thinking');
+  setStatus('THINKING', true);
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: question }]
+      })
+    });
+    const data = await res.json();
+    const answer = data.content && data.content[0] ? data.content[0].text : "I didn't catch that.";
+    respond(answer);
+  } catch (e) {
+    respond('I had trouble reaching the network just now.');
+  } finally {
+    core.classList.remove('thinking');
+    setStatus('TAP THE CORE TO SPEAK', false);
+  }
+}
+
+addLine('jarvis', 'Online. Tap the core and speak — I understand "open," "search," "what time is it," or just talk to me normally.');
+</script>
+
+</body>
+</html>
